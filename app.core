@@ -1,0 +1,189 @@
+from flask import Flask, request, jsonify, render_template_string
+import hashlib
+import re
+import json
+import os
+import threading
+from datetime import datetime
+
+app = Flask(__name__)
+
+# =====================================================================
+# 🏛️ SYSTÈME AUTONOME D'AUTORÉPARATION ET MAINTENANCE AUTOMATIQUE
+# =====================================================================
+DB_FILE = "zilko_vault.json"
+DB_BACKUP = "zilko_vault.backup.json"
+SIX_MOIS_EN_JOURS = 182
+
+verrou_global = threading.Lock()
+registre_memoire = {}
+logs_maintenance_auto = []
+
+def verifier_et_autoreparer_systeme():
+    """ Inspecte, valide et répare automatiquement la base de données sans intervention humaine """
+    global registre_memoire, logs_maintenance_auto
+    with verrou_global:
+        horodatage = datetime.now().strftime("%H:%M:%S")
+        
+        if not os.path.exists(DB_FILE):
+            registre_memoire = {}
+            return
+
+        try:
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                donnees = json.load(f)
+                if not isinstance(donnees, dict):
+                    raise ValueError("Structure corrompue")
+                registre_memoire = donnees
+        except Exception:
+            logs_maintenance_auto.append(f"[{horodatage}] 🔧 ANOMALIE DÉTECTÉE : Fichier altéré. Lancement de la maintenance automatique.")
+            
+            if os.path.exists(DB_BACKUP):
+                try:
+                    with open(DB_BACKUP, "r", encoding="utf-8") as f_backup:
+                        registre_memoire = json.load(f_backup)
+                    with open(DB_FILE, "w", encoding="utf-8") as f_main:
+                        json.dump(registre_memoire, f_main, ensure_ascii=False, indent=4)
+                    logs_maintenance_auto.append(f"[{horodatage}] ✅ SUCCÈS : Base principale restaurée automatiquement depuis le backup.")
+                    return
+                except:
+                    pass
+            
+            logs_maintenance_auto.append(f"[{horodatage}] ⚠️ SÉCURITÉ : Réinitialisation à chaud pour maintenir l'application en ligne.")
+            registre_memoire = {}
+            with open(DB_FILE, "w", encoding="utf-8") as f_new:
+                json.dump(registre_memoire, f_new)
+
+def sauvegarder_base_redondante():
+    try:
+        with open(DB_FILE, "w", encoding="utf-8") as f:
+            json.dump(registre_memoire, f, ensure_ascii=False, indent=4)
+        with open(DB_BACKUP, "w", encoding="utf-8") as f_backup:
+            json.dump(registre_memoire, f_backup, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"Erreur d'écriture disque : {str(e)}")
+
+def hacher_sha256(texte):
+    return hashlib.sha256(texte.encode('utf-8')).hexdigest()
+
+# 🎨 CONSOLE SOUVERAINE CYBERPUNK (TAILWIND CSS V4 INTÉGRÉ)
+HTML_INTERFACE = """
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zilko Core — Console Autonome</title>
+    <script src="https://jsdelivr.net"></script>
+</head>
+<body class="bg-slate-950 text-white font-sans antialiased p-4 md:p-8">
+
+    <div class="max-w-5xl mx-auto bg-zinc-950 rounded-3xl shadow-2xl border border-zinc-900 p-6 space-y-6">
+        
+        <!-- HEADER INDUSTRIEL -->
+        <header class="flex flex-col md:flex-row md:items-center justify-between border-b border-zinc-900 pb-6 gap-4">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-gradient-to-tr from-indigo-600 to-blue-600 rounded-2xl flex items-center justify-center font-black text-2xl shadow-xl">Z</div>
+                <div>
+                    <h1 class="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">ZILKO PLANETARY CORE v100</h1>
+                    <p class="text-[10px] text-zinc-500 font-bold tracking-widest uppercase">Maintenance Autonome active • Fondateur LEWIS — Ottawa</p>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3 bg-zinc-900/40 p-3 rounded-2xl border border-zinc-900 text-center min-w-[260px]">
+                <div>
+                    <div id="statTotal" class="text-sm font-black text-green-400">0</div>
+                    <div class="text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Flux Ingestés</div>
+                </div>
+                <div>
+                    <div id="statMaint" class="text-sm font-black text-emerald-400 animate-pulse">AUTO-MANAGED</div>
+                    <div class="text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Statut Maintenance</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid md:grid-cols-2 gap-6">
+            <!-- COIN INGESTION -->
+            <div class="bg-zinc-900/30 border border-zinc-900 p-5 rounded-2xl space-y-4">
+                <h3 class="text-xs font-black text-zinc-400 uppercase tracking-widest text-indigo-400">Pipeline Ingestion Globale</h3>
+                <div>
+                    <label class="text-[9px] text-zinc-500 font-bold uppercase block mb-1">ID Entreprise Client</label>
+                    <input type="text" id="idEntreprise" value="ENTREPRISE_OTTAWA" class="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs font-mono text-zinc-300">
+                </div>
+                <div>
+                    <label class="text-[9px] text-zinc-500 font-bold uppercase block mb-1">Payload Message</label>
+                    <textarea id="messageClient" rows="2" class="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-300 font-mono resize-none">Acheter formule B2B immédiatement, quel est le prix ?</textarea>
+                </div>
+                <div>
+                    <label class="text-[9px] text-zinc-500 font-bold uppercase block mb-1">Clé d'Idempotence (Anti-Fraude)</label>
+                    <input type="text" id="cleIdempotence" value="TX_GLOBAL_1001" class="w-full p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs font-mono text-amber-400">
+                </div>
+                <button onclick="injecterFluxMondial()" class="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-black text-xs py-3.5 rounded-xl transition shadow-lg active:scale-95 cursor-pointer">
+                    ⚡ INJECTER DANS LA PIPELINE SOUVERAINE
+                </button>
+            </div>
+
+            <!-- SUPERVISEUR DE LOGS AUTO -->
+            <div class="space-y-4">
+                <div class="bg-black border border-zinc-900 rounded-2xl p-5 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h4 class="text-xs font-black text-amber-400 uppercase tracking-widest">🛠️ Journal d'Auto-Maintenance (Zilko Monitor)</h4>
+                        <div id="msLatency" class="text-[9px] font-mono text-zinc-500">0.00 ms</div>
+                    </div>
+                    <div id="journalMaintenance" class="space-y-1.5 max-h-36 overflow-y-auto text-[10px] font-mono pr-2">
+                        <div class="text-zinc-600 italic">Système nominal. Zéro bug détecté.</div>
+                    </div>
+                    <button onclick="saboterFichierVolontairement()" class="w-full mt-2 text-[9px] bg-red-600/10 border border-red-500/20 hover:bg-red-600/20 text-red-400 py-2 rounded-xl transition font-bold cursor-pointer">
+                        💥 TESTER LE ROBOT : TRUQUER / CORROMPRE LE FICHIER DISQUE
+                    </button>
+                </div>
+
+                <div class="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-4 space-y-1">
+                    <h4 class="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Flux Télémétrique RPC (Réponse JSON)</h4>
+                    <pre id="reponseServeur" class="text-[10px] font-mono text-cyan-400 h-16 overflow-y-auto whitespace-pre-wrap bg-zinc-950 p-2 rounded-xl border border-zinc-900">{}</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let total = 0;
+
+        async function injecterFluxMondial() {
+            const ent = document.getElementById('idEntreprise').value;
+            const msg = document.getElementById('messageClient').value;
+            const key = document.getElementById('cleIdempotence').value;
+            const out = document.getElementById('reponseServeur');
+            const t0 = performance.now();
+
+            try {
+                const response = await fetch('/api/filtrer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ entreprise_id: ent, message: msg, cle_idempotence: key })
+                });
+                const data = await response.json();
+                document.getElementById('msLatency').textContent = `${(performance.now() - t0).toFixed(2)} ms`;
+
+                if (response.status === 201) {
+                    total++;
+                    document.getElementById('statTotal').textContent = total;
+                    rafraichirLogsMaintenance();
+                }
+                out.textContent = JSON.stringify(data, null, 4);
+            } catch {
+                out.textContent = "Erreur de liaison locale avec app.py.";
+            }
+        }
+
+        async function rafraichirLogsMaintenance() {
+            try {
+                const response = await fetch('/api/maintenance/logs');
+                const logs = await response.json();
+                const container = document.getElementById('journalMaintenance');
+                if(logs.length > 0) {
+                    container.innerHTML = logs.map(l => `<div class="text-zinc-400 border-b border-zinc-900 pb-1">${l}</div>`).join('');
+                }
+            } catch {}
+        }
+
